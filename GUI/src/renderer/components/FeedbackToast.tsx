@@ -1,7 +1,7 @@
 import { Button, useToast } from '@chakra-ui/react';
-import IfeedbackToast from './IfeedbackToast';
+import IToastProps from './IToastProps';
 
-function FeedbackToast(props: IfeedbackToast) {
+function FeedbackToast(props: IToastProps) {
   const toast = useToast();
   return (
     <Button

@@ -34,14 +34,15 @@ const arduinoAPI = {
   onSerialPortClosed: (
     callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void
   ) => ipcRenderer.on('serial-port-closed', callback),
-  onSerialPortCodeRecived: (
+  onSerialPortDataReaded: (
     callback: (event: Electron.IpcRendererEvent, ...args: any[]) => void
-  ) => ipcRenderer.on('serial-port-code-recived', callback),
+  ) => ipcRenderer.on('serial-port-data-readed', callback),
   saveNewModel: (alphabet: string) =>
     ipcRenderer.invoke('save-new-model', alphabet),
   loadModel: () => ipcRenderer.invoke('load-model'),
   reloadAvailableDevices: () => ipcRenderer.invoke('reload-available-devices'),
   openPort: (port: string) => ipcRenderer.send('open-port', port),
+  sendDataToDataSet: (gloveInputs: Array<number>, desiredOutput: string) => ipcRenderer.send('send-data-to-data-set', gloveInputs, desiredOutput),
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

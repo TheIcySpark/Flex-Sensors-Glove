@@ -15,7 +15,7 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import * as tf from '@tensorflow/tfjs';
-import { SerialPort } from 'serialport';
+import { ReadlineParser, SerialPort } from 'serialport';
 import * as fs from 'fs'
 require('@tensorflow/tfjs-node');
 const { DelimiterParser } = require('@serialport/parser-delimiter')
@@ -24,6 +24,7 @@ var serialPort: SerialPort;
 var serialPortParser: any
 
 var model: tf.Sequential;
+var modelDirectoryPath: string;
 
 interface IAlphabetData{
   outputs: string,
@@ -43,7 +44,7 @@ async function initializeSerialPort(){
 }
 
 function setSerialPort(){
-  serialPortParser = serialPort.pipe(new DelimiterParser({ delimiter: '\n' }))
+  serialPortParser = serialPort.pipe(new ReadlineParser())
 
   serialPort.on('error', function(error: Error){
     mainWindow?.webContents.send('serial-port-error', error);
@@ -54,9 +55,7 @@ function setSerialPort(){
   })
   
   serialPortParser.on('data', function(data: string){
-    if(data == 'Code recived\r'){
-      mainWindow?.webContents.send('serial-port-code-recived');
-    }
+    mainWindow?.webContents.send('serial-port-data-readed', data);
   })
   
   serialPort.on('close', function(){
@@ -69,7 +68,7 @@ async function sendCode(event: any, code: string){
   if(!serialPort.isOpen){
     serialPort.open();
     setTimeout(() =>{
-
+      
     }, 100)
   }
   serialPort.write(code);
@@ -116,15 +115,15 @@ async function saveNewModel(event: any, alphabet: string){
       metrics: ['accuracy'],
     });
 
-    const path: string = result.filePaths[0].replace(/\\/g, '/');
+    modelDirectoryPath = result.filePaths[0].replace(/\\/g, '/');
 
     const alphabetData: IAlphabetData = {outputs: alphabet, xs: [], ys: []}
 
-    fs.writeFileSync(path + '/alphabetData.json', JSON.stringify(alphabetData));
+    fs.writeFileSync(modelDirectoryPath + '/alphabetData.json', JSON.stringify(alphabetData));
 
-    await model.save('file://' + path);
+    await model.save('file://' + modelDirectoryPath);
 
-    return path;
+    return modelDirectoryPath;
   })
 }
 
@@ -138,11 +137,22 @@ async function loadModel(){
     if(result.canceled){
       return;
     }
-    let path: string = result.filePaths[0].replace(/\\/g, '/')
-    path = path.replace(/\/model.json/, '');
-    model = await tf.loadLayersModel('file://' + path + '/model.json') as tf.Sequential;
-    return [path, (JSON.parse(fs.readFileSync(path + '/alphabetData.json').toString()) as IAlphabetData).outputs]
+    modelDirectoryPath = result.filePaths[0].replace(/\\/g, '/')
+    modelDirectoryPath = modelDirectoryPath.replace(/\/model.json/, '');
+    
+    model = await tf.loadLayersModel('file://' + modelDirectoryPath + '/model.json') as tf.Sequential;
+    return [modelDirectoryPath, (JSON.parse(fs.readFileSync(modelDirectoryPath + '/alphabetData.json').toString()) as IAlphabetData).outputs]
   })
+}
+
+async function sendDataToDataSet(event: any, gloveInputs: Array<number>, desiredOutput: string){
+  var data = JSON.parse(fs.readFileSync(modelDirectoryPath + '/alphabetData.json').toString()) as IAlphabetData;
+  data.xs.push(gloveInputs);
+  const alphabet = data.outputs.split(' ');
+  const desiredOutputIndex = alphabet.indexOf(desiredOutput);
+  data.ys.push(Array(alphabet.length).fill(0));
+  data.ys[data.ys.length - 1][desiredOutputIndex] = 1;
+  fs.writeFileSync(modelDirectoryPath + '/alphabetData.json', JSON.stringify(data));
 }
 
 class AppUpdater {
@@ -262,6 +272,7 @@ app
     ipcMain.handle('save-new-model', saveNewModel);
     ipcMain.handle('load-model', loadModel);
     ipcMain.handle('reload-available-devices', reloadAvailableDevices);
+    ipcMain.on('send-data-to-data-set', sendDataToDataSet);
     ipcMain.on('open-port', openPort);
     initializeSerialPort();
     createWindow();

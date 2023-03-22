@@ -43,6 +43,8 @@ const arduinoAPI = {
   reloadAvailableDevices: () => ipcRenderer.invoke('reload-available-devices'),
   openPort: (port: string) => ipcRenderer.send('open-port', port),
   sendDataToDataSet: (gloveInputs: Array<number>, desiredOutput: string) => ipcRenderer.send('send-data-to-data-set', gloveInputs, desiredOutput),
+  trainModel: () => ipcRenderer.invoke('train-model'),
+  predictResponse: (gloveInputs: Array<number>) => ipcRenderer.invoke('predict-response', gloveInputs)
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);

@@ -1,9 +1,30 @@
 import { Button, Center, ChakraProvider, Divider, Heading, HStack, Tag, VStack } from "@chakra-ui/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import IGloveInput from "./IGloveInput";
 
-export default function GloveResponseSection(){
+interface IProps{
+  gloveInputs: IGloveInput,
+  modelPath: string
+}
+
+export default function GloveResponseSection(props: IProps){
     const [currentPredictionText, setCurrentPredictionText] = useState('Waiting ...');
 
+    async function predictResponse(){
+      const response: string = await window.arduinoAPI.predictResponse([
+        props.gloveInputs.thumbFinger,
+        props.gloveInputs.indexFinger,
+        props.gloveInputs.middleFinger,
+        props.gloveInputs.rightFinger,
+        props.gloveInputs.littleFinger,
+      ]);
+      setCurrentPredictionText(response);
+    }
+
+    useEffect(() =>{
+      if(props.modelPath == '') return;
+      predictResponse();
+    }, [props.gloveInputs])
 
     return(
         <ChakraProvider>
@@ -16,14 +37,6 @@ export default function GloveResponseSection(){
               <Tag colorScheme="purple">
                 <Heading>{currentPredictionText}</Heading>
               </Tag>
-              <HStack w="100%">
-                <Button colorScheme="green" w="50%">
-                  Start predictions
-                </Button>
-                <Button colorScheme="red" w="50%">
-                  Stop predictions
-                </Button>
-              </HStack>
             </VStack>
           </Center>
         </ChakraProvider>

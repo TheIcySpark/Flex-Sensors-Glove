@@ -86,7 +86,7 @@ export default function App() {
         </GridItem>
 
         <GridItem rowSpan={2} colSpan={3}>
-          <GloveResponseSection></GloveResponseSection>
+          <GloveResponseSection modelPath={modelPath} gloveInputs={gloveInputs}></GloveResponseSection>
         </GridItem>
       </Grid>
       <FeedbackToast

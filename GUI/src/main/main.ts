@@ -95,6 +95,13 @@ async function openPort(event: any, path: string){
   
 }
 
+function compileModel(){
+  model.compile({
+    optimizer: tf.train.adam(),
+    loss: tf.losses.meanSquaredError,
+    metrics: ['accuracy'],
+  });
+}
 
 async function saveNewModel(event: any, alphabet: string){
   return dialog.showOpenDialog({
@@ -105,15 +112,11 @@ async function saveNewModel(event: any, alphabet: string){
     }
     const alphabetSize = alphabet.split(' ').length;
     model = tf.sequential();
-    model.add(tf.layers.dense({ inputShape: [6], units: alphabetSize, useBias: true }));
-    model.add(tf.layers.dense({ units: alphabetSize }));
-    model.add(tf.layers.dense({ units: alphabetSize }));
+    model.add(tf.layers.dense({ inputShape: [5], units: alphabetSize * 10, useBias: true, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: alphabetSize * 5, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: alphabetSize, activation: 'softmax' }));
   
-    model.compile({
-      optimizer: tf.train.adam(),
-      loss: tf.losses.meanSquaredError,
-      metrics: ['accuracy'],
-    });
+    compileModel();
 
     modelDirectoryPath = result.filePaths[0].replace(/\\/g, '/');
 
@@ -153,6 +156,53 @@ async function sendDataToDataSet(event: any, gloveInputs: Array<number>, desired
   data.ys.push(Array(alphabet.length).fill(0));
   data.ys[data.ys.length - 1][desiredOutputIndex] = 1;
   fs.writeFileSync(modelDirectoryPath + '/alphabetData.json', JSON.stringify(data));
+}
+
+async function trainModel(){
+  const data = JSON.parse(fs.readFileSync(modelDirectoryPath + '/alphabetData.json').toString()) as IAlphabetData;
+  const {inputs, labels} =  tf.tidy(() =>{
+    const inputTensor = tf.tensor(data.xs);
+    const labelTensor = tf.tensor(data.ys);
+    
+    const inputMax = inputTensor.max();
+    const inputMin = inputTensor.min();
+
+    const normalizedInputs = inputTensor.sub(inputMin).div(inputMax.sub(inputMin));
+
+    return{
+      inputs: normalizedInputs,
+      labels: labelTensor
+    }
+  })
+
+  compileModel();
+
+  await model.fit(inputs, labels, {
+    epochs: 100,
+  }).then(info =>{
+    console.log(info)
+  })
+}
+
+async function predictResponse(event: any, gloveInputs: Array<number>){
+  const data = JSON.parse(fs.readFileSync(modelDirectoryPath + '/alphabetData.json').toString()) as IAlphabetData;
+
+  const {inputs} =  tf.tidy(() =>{
+    const inputTensor = tf.tensor(gloveInputs);
+    
+    const inputMax = inputTensor.max();
+    const inputMin = inputTensor.min();
+
+    const normalizedInputs = inputTensor.sub(inputMin).div(inputMax.sub(inputMin));
+
+    return{
+      inputs: normalizedInputs,
+    }
+  })
+  const response = model.predict(inputs.reshape([1, 5])) as tf.Tensor
+  const letterIndex = response.argMax(1).dataSync()[0]
+
+  return data.outputs.split(' ')[letterIndex]
 }
 
 class AppUpdater {
@@ -272,6 +322,8 @@ app
     ipcMain.handle('save-new-model', saveNewModel);
     ipcMain.handle('load-model', loadModel);
     ipcMain.handle('reload-available-devices', reloadAvailableDevices);
+    ipcMain.handle('train-model', trainModel);
+    ipcMain.handle('predict-response', predictResponse);
     ipcMain.on('send-data-to-data-set', sendDataToDataSet);
     ipcMain.on('open-port', openPort);
     initializeSerialPort();
